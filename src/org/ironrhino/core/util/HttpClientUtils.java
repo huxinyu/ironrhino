@@ -28,11 +28,14 @@ import org.apache.http.client.methods.HttpPut;
 import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.message.BasicHeader;
 import org.apache.http.message.BasicNameValuePair;
 import org.apache.http.util.EntityUtils;
+import org.ironrhino.core.tracing.Tracing;
 
+import io.opentracing.contrib.apache.http.client.TracingHttpClientBuilder;
 import lombok.experimental.UtilityClass;
 
 @UtilityClass
@@ -63,9 +66,17 @@ public class HttpClientUtils {
 	public static CloseableHttpClient create(int connectTimeout) {
 		RequestConfig requestConfig = RequestConfig.custom().setCircularRedirectsAllowed(true)
 				.setConnectTimeout(connectTimeout).setExpectContinueEnabled(true).build();
-		CloseableHttpClient httpclient = HttpClients.custom().disableAuthCaching().disableConnectionState()
-				.disableCookieManagement().setConnectionTimeToLive(60, TimeUnit.SECONDS)
-				.setDefaultRequestConfig(requestConfig).setDefaultHeaders(DEFAULT_HEADERS)
+		HttpClientBuilder builder;
+		if (Tracing.isEnabled()) {
+			builder = new TracingHttpClientBuilder().disableCookieManagement();
+			// call arbitrary method to cheat for compiler linking
+			// avoid NoClassDefFoundError
+		} else {
+			builder = HttpClients.custom();
+		}
+		CloseableHttpClient httpclient = builder.disableAuthCaching().disableConnectionState().disableCookieManagement()
+				.setConnectionTimeToLive(60, TimeUnit.SECONDS).setDefaultRequestConfig(requestConfig)
+				.setDefaultHeaders(DEFAULT_HEADERS)
 				.setRetryHandler(
 						(e, executionCount, httpCtx) -> executionCount < 3 && e instanceof NoHttpResponseException)
 				.build();
